@@ -2,135 +2,89 @@
 
 /**
  * Сериализация массива чисел в компактную ASCII-строку
- * @param {number[]} numbers - массив чисел от 1 до 300
- * @returns {string} сжатая строка
+ * Используем: 9 бит на число → упаковка в байты → Base64
  */
 function serialize(numbers) {
   if (!numbers || numbers.length === 0) return "";
 
-  // Валидация чисел
+  // Валидация
   for (let num of numbers) {
     if (num < 1 || num > 300) {
-      throw new Error(`Число ${num} вне допустимого диапазона (1-300)`);
+      throw new Error(`Число ${num} вне диапазона (1-300)`);
     }
   }
 
-  // Упаковка: 9 бит на число
-  let packed = 0n;
-  for (let i = 0; i < numbers.length; i++) {
-    packed = (packed << 9n) | BigInt(numbers[i] - 1);
+  // Упаковываем все числа в битовый поток (9 бит на число)
+  const bits = [];
+  for (let num of numbers) {
+    const val = num - 1; // 0..299
+    for (let b = 8; b >= 0; b--) {
+      bits.push((val >> b) & 1);
+    }
   }
 
-  const totalBits = numbers.length * 9;
-  const byteLength = Math.ceil(totalBits / 8);
-
-  // BigInt → байтовый массив (big-endian)
-  const bytes = new Uint8Array(byteLength);
-  for (let i = 0; i < byteLength; i++) {
-    const shift = BigInt((byteLength - 1 - i) * 8);
-    bytes[i] = Number((packed >> shift) & 0xFFn);
+  // Добиваем до кратности 8
+  while (bits.length % 8 !== 0) {
+    bits.push(0);
   }
 
-  return base85Encode(bytes);
+  // Преобразуем биты в байты
+  const bytes = [];
+  for (let i = 0; i < bits.length; i += 8) {
+    let byte = 0;
+    for (let j = 0; j < 8; j++) {
+      byte = (byte << 1) | bits[i + j];
+    }
+    bytes.push(byte);
+  }
+
+  // Кодируем в Base64 (надежно и везде работает)
+  const binaryString = String.fromCharCode(...bytes);
+  const base64 = btoa(binaryString);
+
+  // Добавляем префикс с количеством чисел (для корректной десериализации)
+  const countHex = numbers.length.toString(16).padStart(4, '0');
+  return countHex + base64;
 }
 
 /**
- * Десериализация из ASCII-строки обратно в массив чисел
- * @param {string} str - сжатая строка
- * @returns {number[]} массив чисел
+ * Десериализация из строки обратно в массив чисел
  */
-function deserialize(str) {
-  if (!str || str.length === 0) return [];
+function deserialize(serializedStr) {
+  if (!serializedStr || serializedStr.length < 4) return [];
 
-  const bytes = base85Decode(str);
+  // Извлекаем количество чисел (первые 4 символа — hex)
+  const countHex = serializedStr.slice(0, 4);
+  const expectedCount = parseInt(countHex, 16);
+  const base64 = serializedStr.slice(4);
 
-  // Байты → BigInt
-  let packed = 0n;
-  for (let i = 0; i < bytes.length; i++) {
-    packed = (packed << 8n) | BigInt(bytes[i]);
+  // Декодируем Base64
+  const binaryString = atob(base64);
+  const bytes = [];
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes.push(binaryString.charCodeAt(i));
   }
 
-  const totalBits = bytes.length * 8;
-  const numCount = Math.floor(totalBits / 9);
-  const numbers = [];
+  // Преобразуем байты в биты
+  const bits = [];
+  for (let byte of bytes) {
+    for (let b = 7; b >= 0; b--) {
+      bits.push((byte >> b) & 1);
+    }
+  }
 
-  for (let i = numCount - 1; i >= 0; i--) {
-    const val = Number((packed >> BigInt(i * 9)) & 0x1FFn);
+  // Извлекаем числа по 9 бит
+  const numbers = [];
+  for (let i = 0; i < bits.length && numbers.length < expectedCount; i += 9) {
+    if (i + 9 > bits.length) break;
+    let val = 0;
+    for (let j = 0; j < 9; j++) {
+      val = (val << 1) | bits[i + j];
+    }
     numbers.push(val + 1);
   }
 
   return numbers;
-}
-
-// ========== BASE85 (ASCII85) ==========
-
-function base85Encode(bytes) {
-  const n = bytes.length;
-  const r = n % 4;
-  const padded = new Uint8Array(n + (4 - r) % 4);
-  padded.set(bytes);
-
-  let result = "";
-  for (let i = 0; i < padded.length; i += 4) {
-    let word = 0;
-    word |= padded[i] << 24;
-    word |= padded[i + 1] << 16;
-    word |= padded[i + 2] << 8;
-    word |= padded[i + 3];
-
-    if (word === 0 && i + 4 <= n) {
-      result += "z";
-    } else {
-      const block = [0, 0, 0, 0, 0];
-      for (let j = 4; j >= 0; j--) {
-        block[j] = word % 85;
-        word = Math.floor(word / 85);
-      }
-      for (let j = 0; j < 5; j++) {
-        result += String.fromCharCode(block[j] + 33);
-      }
-    }
-  }
-
-  const outLen = Math.ceil((n * 5) / 4);
-  return result.slice(0, outLen);
-}
-
-function base85Decode(str) {
-  const bytes = [];
-  let i = 0;
-
-  while (i < str.length) {
-    if (str[i] === 'z') {
-      bytes.push(0, 0, 0, 0);
-      i++;
-      continue;
-    }
-
-    const block = [0, 0, 0, 0, 0];
-    for (let j = 0; j < 5; j++) {
-      if (i + j >= str.length) break;
-      block[j] = str.charCodeAt(i + j) - 33;
-    }
-
-    let word = 0;
-    for (let j = 0; j < 5; j++) {
-      word = word * 85 + block[j];
-    }
-
-    bytes.push((word >> 24) & 0xFF);
-    bytes.push((word >> 16) & 0xFF);
-    bytes.push((word >> 8) & 0xFF);
-    bytes.push(word & 0xFF);
-
-    i += 5;
-  }
-
-  while (bytes.length > 0 && bytes[bytes.length - 1] === 0) {
-    bytes.pop();
-  }
-
-  return new Uint8Array(bytes);
 }
 
 // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
@@ -140,17 +94,18 @@ function simpleSerialize(numbers) {
 }
 
 function compressionRatio(original, compressed) {
+  if (compressed.length === 0) return "0";
   return (original.length / compressed.length).toFixed(2);
 }
 
 function parseInput(str) {
-  // Разделяем по запятым, пробелам, табуляции
   const parts = str.split(/[,\s]+/);
   const numbers = [];
   for (let part of parts) {
     if (part.trim() === "") continue;
     const num = parseInt(part.trim(), 10);
     if (isNaN(num)) continue;
+    if (num < 1 || num > 300) continue;
     numbers.push(num);
   }
   return numbers;
@@ -213,7 +168,7 @@ function runSingleTest(testCase) {
     const compressed = serialize(numbers);
     const decompressed = deserialize(compressed);
 
-    // Сравнение множеств (порядок не важен)
+    // Сравнение содержимого (порядок не важен)
     const sortedOrig = [...numbers].sort((a, b) => a - b);
     const sortedDecomp = [...decompressed].sort((a, b) => a - b);
     const isValid = JSON.stringify(sortedOrig) === JSON.stringify(sortedDecomp);
@@ -230,6 +185,7 @@ function runSingleTest(testCase) {
       compressed: compressed
     };
   } catch (error) {
+    console.error(`Ошибка в тесте ${testCase.name}:`, error);
     return {
       name: testCase.name,
       error: error.message,
@@ -241,7 +197,8 @@ function runSingleTest(testCase) {
 function runAllTests() {
   const results = [];
   for (let testCase of testCases) {
-    results.push(runSingleTest(testCase));
+    const result = runSingleTest(testCase);
+    results.push(result);
   }
   displayTestResults(results);
   updateStats(results);
@@ -257,12 +214,13 @@ function displayTestResults(results) {
       html += `
                 <div class="test-card">
                     <div class="test-name">❌ ${result.name}</div>
-                    <div class="test-desc">Ошибка: ${result.error}</div>
+                    <div class="test-desc" style="color: red;">Ошибка: ${result.error}</div>
                 </div>
             `;
     } else {
       const badgeClass = result.valid ? 'success' : 'error';
       const badgeText = result.valid ? '✓ ВЕРНО' : '✗ ОШИБКА';
+      const ratioColor = parseFloat(result.ratio) >= 2 ? '#28a745' : (parseFloat(result.ratio) >= 1.5 ? '#ffc107' : '#dc3545');
       html += `
                 <div class="test-card">
                     <div class="test-name">
@@ -270,10 +228,10 @@ function displayTestResults(results) {
                         <span class="badge ${badgeClass}">${badgeText}</span>
                     </div>
                     <div class="test-desc">
-                        Чисел: ${result.count}<br>
-                        Простая: ${result.simpleLen} симв.<br>
-                        Сжатая: ${result.compressedLen} симв.<br>
-                        <strong>Коэффициент: ${result.ratio}x</strong>
+                        📊 Чисел: ${result.count}<br>
+                        📝 Простая: ${result.simpleLen} симв.<br>
+                        🗜️ Сжатая: ${result.compressedLen} симв.<br>
+                        <strong style="color: ${ratioColor};">📈 Коэффициент: ${result.ratio}x</strong>
                     </div>
                 </div>
             `;
@@ -290,7 +248,11 @@ function clearTests() {
 
 function updateStats(results) {
   const validResults = results.filter(r => !r.error && r.valid);
-  if (validResults.length === 0) return;
+  if (validResults.length === 0) {
+    const statsArea = document.getElementById('statsArea');
+    if (statsArea) statsArea.innerHTML = '<p style="color: #666;">Нет данных для статистики</p>';
+    return;
+  }
 
   const avgRatio = validResults.reduce((sum, r) => sum + parseFloat(r.ratio), 0) / validResults.length;
   const bestRatio = Math.max(...validResults.map(r => parseFloat(r.ratio)));
@@ -329,7 +291,7 @@ function processSerialize() {
   const numbers = parseInput(input);
 
   if (numbers.length === 0) {
-    showResult('error', 'Ошибка', 'Введите хотя бы одно число');
+    showResult('error', 'Ошибка', 'Введите хотя бы одно число (1-300)');
     return;
   }
 
@@ -340,16 +302,16 @@ function processSerialize() {
 
     showResult('success', '✅ Сериализация выполнена', `
             <div class="result-item">
-                <div class="result-label">Исходные числа</div>
+                <div class="result-label">Исходные числа (${numbers.length} шт.)</div>
                 <div class="result-value">${numbers.slice(0, 20).join(', ')}${numbers.length > 20 ? '...' : ''}</div>
             </div>
             <div class="result-item">
                 <div class="result-label">Простая строка (${simple.length} симв.)</div>
-                <div class="result-value">${simple.slice(0, 100)}${simple.length > 100 ? '...' : ''}</div>
+                <div class="result-value" style="word-break: break-all;">${simple.slice(0, 200)}${simple.length > 200 ? '...' : ''}</div>
             </div>
             <div class="result-item">
                 <div class="result-label">Сжатая строка (${compressed.length} симв.)</div>
-                <div class="result-value" style="font-family: monospace;">${compressed}</div>
+                <div class="result-value" style="font-family: monospace; word-break: break-all;">${compressed}</div>
             </div>
             <div class="stat-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
                 <div class="stat-label">Коэффициент сжатия</div>
@@ -376,8 +338,8 @@ function processDeserialize() {
 
     showResult('success', '✅ Десериализация выполнена', `
             <div class="result-item">
-                <div class="result-label">Сжатая строка</div>
-                <div class="result-value">${compressed}</div>
+                <div class="result-label">Сжатая строка (${compressed.length} симв.)</div>
+                <div class="result-value" style="font-family: monospace;">${compressed}</div>
             </div>
             <div class="result-item">
                 <div class="result-label">Восстановленные числа (${numbers.length} шт.)</div>
@@ -385,7 +347,7 @@ function processDeserialize() {
             </div>
             <div class="result-item">
                 <div class="result-label">Простая строка (${simple.length} симв.)</div>
-                <div class="result-value">${simple.slice(0, 100)}${simple.length > 100 ? '...' : ''}</div>
+                <div class="result-value" style="word-break: break-all;">${simple.slice(0, 200)}${simple.length > 200 ? '...' : ''}</div>
             </div>
         `);
   } catch (error) {
@@ -416,7 +378,8 @@ function loadExample() {
   processSerialize();
 }
 
-// Загружаем тесты при старте
+// Автозапуск тестов при загрузке
 window.addEventListener('DOMContentLoaded', () => {
+  console.log("Приложение загружено, запускаем тесты...");
   runAllTests();
 });
