@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Компактная сериализация чисел | Тестовое задание</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            color: #333;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .input-field {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .result {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+
+        .result h3 {
+            margin: 0 0 12px 0;
+            color: #333;
+            font-size: 18px;
+        }
+
+        .result-item {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .result-label {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .result-value {
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+            margin-top: 8px;
+            font-size: 13px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .test-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .test-card:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
+        }
+
+        .test-card.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .test-name {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .test-desc {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .badge.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        hr {
+            margin: 20px 0;
+            border: none;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        @media (max-width: 768px) {
+            .card {
+                padding: 16px;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>📦 Компактная сериализация чисел</h1>
+        <div class="subtitle">
+            Алгоритм: 9 бит на число (диапазон 1-300) + кодирование Base85<br>
+            Цель: сжатие в 2+ раза относительно строки вида "1,2,3"
+        </div>
+
+        <div class="input-group">
+            <div class="input-field">
+                <label>📝 Введите числа (через запятую или пробел):</label>
+                <textarea id="inputNumbers" rows="4" placeholder="Пример: 1, 300, 237, 188&#10;или&#10;1 300 237 188&#10;или&#10;1,300,237,188"></textarea>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button onclick="processSerialize()">🔒 Сериализовать</button>
+            <button onclick="processDeserialize()">🔓 Десериализовать</button>
+            <button onclick="clearAll()">🗑️ Очистить</button>
+            <button onclick="loadExample()">📋 Загрузить пример</button>
+        </div>
+
+        <div id="resultArea"></div>
+    </div>
+
+    <div class="card">
+        <h2>🧪 Тесты</h2>
+        <div class="button-group">
+            <button onclick="runAllTests()">▶️ Запустить все тесты</button>
+            <button onclick="clearTests()">🗑️ Очистить результаты тестов</button>
+        </div>
+        <div id="testResults"></div>
+    </div>
+
+    <div class="card">
+        <h2>📊 Статистика алгоритма</h2>
+        <div id="statsArea"></div>
+    </div>
+</div>
+
+<script src="serializer.js"></script>
+</body>
+</html>
